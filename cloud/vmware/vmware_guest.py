@@ -36,7 +36,7 @@ options:
         description:
             - What state should the virtualmachine be in?
         required: True
-        choices: ['present', 'absent', 'poweredon', 'poweredoff', 'restarted', 'suspended']
+        choices: ['present', 'absent', 'poweredon', 'poweredoff', 'restarted', 'suspended', 'shutdownguest', 'rebootguest']
    name:
         description:
             - Name of the newly deployed guest
@@ -547,6 +547,19 @@ class PyVmomiHelper(object):
                     else:
                         result = {'changed': False, 'failed': True, 
                                   'msg': "Cannot restart VM in the current state %s" % current_state}
+                        
+                elif expected_state in ['shutdownguest', 'rebootguest']:
+                    if current_state == 'poweredon' and vm.guest.toolsRunningStatus == 'guestToolsRunning':
+                        if expected_state == 'shutdownguest':
+                            task = vm.ShutdownGuest()
+                            result = {'changed': True, 'failed': False}
+                        else:
+                            task = vm.RebootGuest()
+                            result = {'changed': True, 'failed': False}
+                    else:
+                        result = {'changed': False, 'failed': True,
+                                  'msg': "VM %s must be in poweredon state & tools should be installed " \
+                                                                    "for guest shutdown/reboot" % vm.name}
 
             except Exception:
                 result = {'changed': False, 'failed': True, 
@@ -1248,7 +1261,9 @@ def main():
                     'present',
                     'absent',
                     'restarted',
-                    'reconfigured'
+                    'reconfigured',
+                    'shutdownguest',
+                    'rebootguest'
                 ],
                 default='present'),
             validate_certs=dict(required=False, type='bool', default=True),
@@ -1298,7 +1313,8 @@ def main():
                 # has to be poweredoff first
                 result = pyv.set_powerstate(vm, 'poweredoff', module.params['force'])
             result = pyv.remove_vm(vm)
-        elif module.params['state'] in ['poweredon', 'poweredoff', 'restarted']:
+        elif module.params['state'] in ['poweredon', 'poweredoff', 'restarted',
+                                            'shutdownguest', 'rebootguest']:
             # set powerstate
             result = pyv.set_powerstate(vm, module.params['state'], module.params['force'])
         elif module.params['snapshot_op']:
